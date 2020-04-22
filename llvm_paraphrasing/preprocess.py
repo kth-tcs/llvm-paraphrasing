@@ -5,11 +5,14 @@ import json
 import os
 import re
 from functools import wraps
+from multiprocessing import Pool, cpu_count
 from types import SimpleNamespace
 
 try:
     from loguru import logger
     from tqdm import tqdm
+
+    have_tqdm = True
 
     logger.remove()
     logger.add(
@@ -23,6 +26,9 @@ except ImportError:
     def _printf(*args):
         print(args[0].format(*args[1:]))
 
+    def tqdm(x, **_):
+        return x
+
     class NoLogger:
         def __getattr__(self, key):
             if key in ("error", "exception"):
@@ -30,7 +36,7 @@ except ImportError:
             return _no_func
 
     logger = NoLogger()
-    tqdm = None
+    have_tqdm = False
 
 DATASET = "dataset.json"
 
@@ -80,26 +86,38 @@ def main(args):
         iterator = iter_input_filenames()
     else:
         iterator = args
-    if tqdm:
-        iterator = tqdm(list(iterator))
+    if have_tqdm:
+        iterator = list(iterator)
 
-    # TODO: multiprocess pool
-    for filename in iterator:
-        dataset[filename] = process_dataset(
-            map(str.split, " ".join(tokenize(reader(filename))).strip().split("\n"),)
-        )
+    with Pool(cpu_count()) as p:
+        for k, v in tqdm(
+            p.imap_unordered(process_file, iterator, chunksize=30), total=len(iterator),
+        ):
+            dataset[k] = v
 
     with open(DATASET, "w") as f:
         json.dump(dataset, f, indent=2)
 
 
-@aslist
 def iter_input_filenames():
     while True:
         try:
             yield input().strip()
         except EOFError:
             return
+
+
+def process_file(filename):
+    """
+    multiprocessing-friendly function that executes the preprocessing for a given file.
+    """
+    return (
+        # Return filename because it is needed after pool.map_unordered
+        filename,
+        process_dataset(
+            map(str.split, " ".join(tokenize(reader(filename))).strip().split("\n"))
+        ),
+    )
 
 
 def _reader_so(function):
