@@ -56,4 +56,9 @@ setup(
     packages=[PACKAGE_NAME],
     include_package_data=True,
     package_data={PACKAGE_NAME: ["Reader.so"]},
+    entry_points={
+        "console_scripts": [
+            f"{PACKAGE_NAME}-preprocess = {PACKAGE_NAME}.preprocess:entry_point",
+        ]
+    },
 )
