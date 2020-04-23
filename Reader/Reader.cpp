@@ -87,7 +87,7 @@ static void removeAllMetadata(Instruction &I) {
 static std::string iterFunction(Function &F) {
   std::stringstream buffer;
 
-  if (F.isDeclaration() || F.isInternalLinkage(F.getLinkage())) {
+  if (F.isDeclaration() || !F.hasName()) {
     return "";
   }
   buffer << "Function: " << F.getName().str() << " =";
