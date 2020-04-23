@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import collections
+import argparse
 import ctypes
 import json
 import os
@@ -8,15 +8,22 @@ from functools import wraps
 from multiprocessing import Pool, cpu_count
 from types import SimpleNamespace
 
+from .store import SubtitutionStore
+
+
+def _noop(x, **_):
+    return x
+
+
 try:
     from loguru import logger
-    from tqdm import tqdm
+    from tqdm import tqdm as _tqdm
 
     have_tqdm = True
 
     logger.remove()
     logger.add(
-        lambda msg: tqdm.write(msg, end=""), colorize=True, diagnose=True, level="INFO"
+        lambda msg: _tqdm.write(msg, end=""), colorize=True, diagnose=True, level="INFO"
     )
 except ImportError:
 
@@ -26,9 +33,6 @@ except ImportError:
     def _printf(*args):
         print(args[0].format(*args[1:]))
 
-    def tqdm(x, **_):
-        return x
-
     class NoLogger:
         def __getattr__(self, key):
             if key in ("error", "exception"):
@@ -36,27 +40,9 @@ except ImportError:
             return _no_func
 
     logger = NoLogger()
-    have_tqdm = False
+    _tqdm = _noop
 
 DATASET = "dataset.json"
-
-
-class MaxDefaultDict(collections.defaultdict):
-    # TODO: store as ints, return w/ prefix
-    def __missing__(self, key):
-        if not self.values():
-            value = "NAME0"
-        else:
-            value = f"NAME{self.max_value() + 1}"
-        self[key] = value
-        return value
-
-    def max_value(self):
-        values = list(self.values())
-        max_idx = max(enumerate(values), key=lambda x: int(x[1][4:]))[0]
-        return int(values[max_idx][4:])
-
-    # TODO: make_unique: for each name that appears only once replace with UNIQUE_NAME
 
 
 def aslist(generator):
@@ -73,30 +59,74 @@ def entry_point():
     import sys
 
     try:
-        main(sys.argv[1:])
+        main(parse_args(sys.argv[1:]))
     except:
         logger.exception("Exception")
         raise
 
 
+def parse_args(args):
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--jobs",
+        "-j",
+        metavar="JOBS",
+        const=0,
+        default=None,
+        action="store",
+        nargs="?",
+        type=int,
+        help="Number of parallel jobs in pool. If not specified, no pool is used.",
+    )
+    parser.add_argument(
+        "--no-tqdm",
+        action="store_false",
+        default=have_tqdm,
+        dest="tqdm",
+        help="Do not use tqdm for progress bar",
+    )
+    parser.add_argument(
+        "files",
+        metavar="FILES",
+        nargs="*",
+        help="List of files to process. If not specified, stdin is used to read files.",
+    )
+
+    args = parser.parse_args(args)
+
+    # Make args.jobs always an int for convenience
+    if args.jobs is None:
+        args.jobs = 0
+    elif args.jobs <= 0:
+        args.jobs = cpu_count()
+
+    return args
+
+
 def main(args):
-    dataset = init_dataset()
-
-    if len(args) == 0:
-        iterator = iter_input_filenames()
+    if args.files:
+        iterator = args.files
     else:
-        iterator = args
-    if have_tqdm:
+        iterator = iter_input_filenames()
+    if args.tqdm:
         iterator = list(iterator)
+        tqdm = _tqdm
+    else:
+        tqdm = _noop
 
-    with Pool(cpu_count()) as p:
-        for k, v in tqdm(
-            p.imap_unordered(process_file, iterator, chunksize=30), total=len(iterator),
-        ):
-            dataset[k] = v
+    dataset = {}
+    if args.jobs > 1:
+        with Pool(args.jobs) as p:
+            for k, v in tqdm(
+                p.imap_unordered(process_file, iterator, chunksize=30),
+                total=len(iterator),
+            ):
+                dataset[k] = v
+    else:
+        for filename in tqdm(iterator):
+            dataset[filename] = process_file(filename)[1]
 
-    with open(DATASET, "w") as f:
-        json.dump(dataset, f, indent=2)
+    dump_merge_dataset(dataset)
 
 
 def iter_input_filenames():
@@ -145,12 +175,17 @@ def reader(ret):
     return ret.decode().strip()
 
 
-def init_dataset():
+def dump_merge_dataset(new):
     try:
         with open(DATASET) as f:
-            return json.load(f)
+            dataset = json.load(f)
+            dataset.update(new)
     except FileNotFoundError:
-        return {}
+        dataset = new
+
+    with open(DATASET, "w") as f:
+        # default is needed to support the SubtitutionStore class
+        json.dump(dataset, f, indent=2, default=lambda x: x.__dict__)
 
 
 PATTERNS = SimpleNamespace(
@@ -190,7 +225,7 @@ def tokenize(lines):
 @aslist
 def process_dataset(dataset):
     for line in dataset:
-        context = MaxDefaultDict()
+        context = SubtitutionStore()
         yield process_function(line, context), context
 
 
@@ -209,6 +244,7 @@ NAME_WHITELIST = ["free", "strcmp"]
 
 
 def process_token(token, context):
+    # TODO: support @.str + number
     if token[0] in ("%", "@"):  # type / ref (?)
         pointers = 0
         for c in token[::-1]:
@@ -229,7 +265,7 @@ def process_token(token, context):
             or tpe.lower() in NAME_WHITELIST
         ):
             return token
-        return token[0] + context[tpe] + pointers
+        return f"{token[0]}{context.add(tpe)}{pointers}"
     if token[:2] == "0x":
         return ["0x"] + ["NUMBER" + c for c in token[2:]]
     if token.replace(".", "").replace("e+", "").isdigit():
