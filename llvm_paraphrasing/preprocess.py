@@ -252,20 +252,20 @@ def process_token(token, context):
                 break
             pointers += 1
         if pointers == 0:
-            pointers = ""
             tpe = token[1:]
+            pointers = []
         else:
             tpe = token[1:-pointers]
-            pointers = "*" * pointers
+            pointers = ["*" * pointers]
 
         # XXX: more tokens like for @1 etc -- what are these?
-        if (
+        if not (
             (tpe.isdigit() and token[0] == "%")
             or tpe.startswith(".str.")
             or tpe.lower() in NAME_WHITELIST
         ):
-            return token
-        return f"{token[0]}{context.add(tpe)}{pointers}"
+            tpe = context.add(tpe)
+        return [f"{token[0]}{tpe}"] + pointers
     if token[:2] == "0x":
         return ["0x"] + ["NUMBER" + c for c in token[2:]]
     if token.replace(".", "").replace("e+", "").isdigit():
