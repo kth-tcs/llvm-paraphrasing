@@ -101,6 +101,28 @@ def test_from_json_type_error():
         SubtitutionStore.from_json("[1]")
 
 
+def test_restore():
+    store = SubtitutionStore()
+
+    store.add("XXX")
+    store.add("YYY")
+    store.add("ZZZ", prefix="A")
+
+    assert store.restore_token("NAME0") == "XXX"
+    assert store.restore_token("@NAME0") == "@XXX"
+    assert store.restore_token(".NAME0") is None
+    assert store.restore_token("NAME0005") is None
+    assert store.restore_token("%NAME0005") is None
+    assert store.restore_token("NAME1") == "YYY"
+    assert store.restore_token("NAME12") is None
+    assert store.restore_token("@NAME12") is None
+    assert store.restore_token("A0") == "ZZZ"
+    assert store.restore_token("%A0") == "%ZZZ"
+    assert store.restore_token("A01") is None
+    assert store.restore_token("A20") is None
+    assert store.restore_token("%A20") is None
+
+
 def add_random(store, n_values, prefixes):
     for x in range(n_values):
         original = str(x)

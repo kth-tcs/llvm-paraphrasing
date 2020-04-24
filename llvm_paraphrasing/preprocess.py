@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 import argparse
 import ctypes
-import json
 import os
 import re
-from functools import lru_cache, wraps
+from functools import lru_cache
 from multiprocessing import Pool, cpu_count
 from types import SimpleNamespace
 
 from .store import SubtitutionStore
+from .utils import aslist, read_dataset, write_dataset
 
 
 def _noop(x, **_):
@@ -45,18 +45,6 @@ except ImportError:
 
     logger = NoLogger()
     _tqdm = _noop
-
-DATASET = "dataset.json"
-
-
-def aslist(generator):
-    """Function decorator to transform a generator into a list"""
-
-    @wraps(generator)
-    def wrapper(*args, **kwargs):
-        return list(generator(*args, **kwargs))
-
-    return wrapper
 
 
 def entry_point():
@@ -181,22 +169,19 @@ def _get_library():
 
 def dump_merge_dataset(new):
     try:
-        with open(DATASET) as f:
-            dataset = json.load(f)
-            logger.debug(
-                "Updating old dataset of {} items with new of {} items",
-                len(dataset),
-                len(new),
-            )
-            dataset.update(new)
+        dataset = read_dataset()
+        logger.debug(
+            "Updating old dataset of {} items with new of {} items",
+            len(dataset),
+            len(new),
+        )
+        dataset.update(new)
     except FileNotFoundError:
         logger.debug("No old dataset found")
         dataset = new
 
-    with open(DATASET, "w") as f:
-        logger.debug("Dumping dataset with size: {}", len(dataset))
-        # default is needed to support the SubtitutionStore class
-        json.dump(dataset, f, indent=2, default=lambda x: x.__dict__)
+    logger.debug("Dumping dataset with size: {}", len(dataset))
+    write_dataset(dataset)
 
 
 PATTERNS = SimpleNamespace(

@@ -59,6 +59,7 @@ setup(
     entry_points={
         "console_scripts": [
             f"{PACKAGE_NAME}-preprocess = {PACKAGE_NAME}.preprocess:entry_point",
+            f"{PACKAGE_NAME}-restore = {PACKAGE_NAME}.restore:main",
         ]
     },
 )
