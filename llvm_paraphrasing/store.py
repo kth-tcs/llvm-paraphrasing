@@ -1,8 +1,24 @@
+import json
+
+
 class SubtitutionStore:
-    # TODO: from_json & test
     def __init__(self):
         self._store = {}
         self._last = {}
+
+    @classmethod
+    def from_json(cls, json_data):
+        store = cls()
+
+        if isinstance(json_data, str):
+            json_data = json.loads(json_data)
+        if not isinstance(json_data, dict):
+            raise TypeError("Invalid data, must be dict")
+
+        for prefix, v in json_data["_store"].items():
+            for k, _ in sorted(v.items(), key=lambda x: x[1]["value"]):
+                store.add(k, prefix)
+        return store
 
     def add(self, key, prefix="NAME"):
         existing_prefix, existing_value = self._getitem_and_prefix(key)

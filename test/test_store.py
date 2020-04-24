@@ -1,3 +1,4 @@
+import json
 import random
 
 import pytest
@@ -10,13 +11,7 @@ def test_add():
     prefixes = ["NAME", "XXX", 1]
     n_values = 1000
 
-    for x in range(n_values):
-        original = str(x)
-        prefix = random.choice(prefixes)
-
-        result = store.add(original, prefix=prefix)
-        assert result.original == original
-        assert result.prefix == prefix
+    add_random(store, n_values, prefixes)
 
     assert len(store.values()) == n_values, f"Added {n_values} values"
     assert len(store.prefixes()) == len(prefixes), "Correct amount of prefixes created"
@@ -55,3 +50,67 @@ def test_get_contains():
     assert "XXX" in store, "__contains__ works after add"
     assert "YYY" in store, "__contains__ works after add for all prefixes"
     assert "ZZZ" not in store
+
+
+def test_from_json_empty():
+    store1 = SubtitutionStore()
+    d = dump(store1)
+    store2 = SubtitutionStore.from_json(d)
+    assert d == dump(store2)
+
+    store1.add("XXX")
+    assert dump(store1) != dump(store2)
+
+
+def test_from_json_random():
+    store1 = SubtitutionStore()
+    add_random(store1, 3, ["a", "XXX", "YYY"])
+
+    d = dump(store1)
+    store2 = SubtitutionStore.from_json(d)
+    assert d == dump(store2)
+
+
+def test_from_json_manual():
+    d = {
+        "_store": {
+            "NAME": {
+                "print_context": {
+                    "original": "print_context",
+                    "prefix": "NAME",
+                    "value": 0,
+                },
+                ".preheader": {"original": ".preheader", "prefix": "NAME", "value": 1},
+                "opts": {"original": "opts", "prefix": "NAME", "value": 2},
+            }
+        }
+    }
+    store1 = SubtitutionStore.from_json(d)
+    store2 = SubtitutionStore.from_json(json.dumps(d))
+    d1 = dump(store1)
+    d2 = dump(store2)
+    assert d1 == d2
+
+    d1 = json.loads(d1)
+    del d1["_last"]
+    assert d1 == d
+
+
+def test_from_json_type_error():
+    with pytest.raises(TypeError):
+        SubtitutionStore.from_json("[1]")
+
+
+def add_random(store, n_values, prefixes):
+    for x in range(n_values):
+        original = str(x)
+        prefix = random.choice(prefixes)
+
+        result = store.add(original, prefix=prefix)
+        assert result.original == original
+        assert result.prefix == prefix
+
+
+def dump(store, **kwargs):
+    kwargs.setdefault("default", lambda x: x.__dict__)
+    return json.dumps(store, **kwargs)
