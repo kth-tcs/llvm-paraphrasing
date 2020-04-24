@@ -59,19 +59,12 @@ template <class NodeT> static std::string nodeToStr(const NodeT *Node) {
   raw_string_ostream os(S);
   Node->print(os);
   os.flush();
-  return S;
-}
 
-static std::string instToStr(const Instruction *I) {
-  std::string S = nodeToStr(I);
-
-  // Reformat switch instructions to fit into a single line
-  replaceAll(S, "[", "");
-  replaceAll(S, "]", "");
+  // Reformat switch instructions to fit into a single line. As far as I know,
+  // this only concerns switch instructions and I have confirmed that the
+  // newlines are not needed to re-assemble the bitcode with llvm-as.
   replaceAll(S, "\n", ",");
-  // Better split calls
-  replaceAll(S, "(", " ");
-  replaceAll(S, ")", " ");
+
   return S;
 }
 
@@ -108,7 +101,7 @@ static std::string iterFunction(Function &F) {
 
     for (Instruction &I : BB) {
       removeAllMetadata(I);
-      buffer << "    Instruction: " << instToStr(&I) << std::endl;
+      buffer << "    Instruction: " << nodeToStr(&I) << std::endl;
 
       if (++InstCount > 100) {
         *ErrorStream << "Too many instructions, skipping" << std::endl;

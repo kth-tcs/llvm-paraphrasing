@@ -196,7 +196,7 @@ PATTERNS = SimpleNamespace(
 
 
 def tokenize(lines):
-    for line in filter(bool, map(str.strip, lines.split("\n"))):
+    for line in filter(bool, map(line_replace, lines.split("\n"))):
         result = PATTERNS.f.search(line)
         if result:
             # name, args = result.groups()
@@ -220,6 +220,20 @@ def tokenize(lines):
             continue
 
         logger.error("No match: '{}'", line)
+
+
+def line_replace(line):
+    return (
+        line.replace("[", " [ ")
+        .replace("]", " ] ")
+        .replace("(", " ( ")
+        .replace(")", " ) ")
+        .replace('"', ' " ')
+        .replace("<", " < ")
+        .replace(">", " > ")
+        .replace(",", " , ")
+        .strip()
+    )
 
 
 @aslist
