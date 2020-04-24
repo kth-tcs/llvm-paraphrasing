@@ -92,12 +92,10 @@ static std::string iterFunction(Function &F) {
   }
   buffer << "Function: " << F.getName().str() << " =";
 
+  Type *Ty = F.getReturnType();
+  buffer << " " << nodeToStr(Ty);
   for (Argument &A : F.args()) {
-    Type *Ty = A.getType();
-
-    if (Ty->getTypeID() == Type::StructTyID) {
-      buffer << "struct=";
-    }
+    Ty = A.getType();
 
     buffer << " " << nodeToStr(Ty);
   }
