@@ -291,12 +291,19 @@ def process_token(token, context):
             tpe = context.add(tpe)
         return [f"{token[0]}{tpe}"] + pointers
     if token[:2] == "0x":
-        return ["0x"] + ["NUMBER" + c for c in token[2:]]
-    if token.replace(".", "").replace("e+", "").isdigit():
-        return ["NUMBER" + c for c in token]
+        return ["0x"] + numbered_tokens(token[2:])
+    try:
+        float(token)
+        return numbered_tokens(token)
+    except ValueError:
+        pass
     if token[0] == "-" and token[1:].isdigit():
-        return ["-"] + ["NUMBER" + c for c in token[1:]]
+        return ["-"] + numbered_tokens(token[1:])
     return token
+
+
+def numbered_tokens(token):
+    return ["NUMBER" + c for c in token]
 
 
 if __name__ == "__main__":
