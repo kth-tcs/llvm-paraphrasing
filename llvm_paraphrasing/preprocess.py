@@ -163,11 +163,11 @@ def _reader_so(function):
     ).iterFile
     library_function.restype = ctypes.c_char_p
 
-    @wraps(function)
-    def wrapper(filename, *args, **kwargs):
-        return function(
-            library_function(ctypes.c_char_p(filename.encode())), *args, **kwargs
-        )
+    def wrapper(path):
+        """
+        Use Reader library to parse given bitcode from path
+        """
+        return function(library_function(ctypes.c_char_p(path.encode())))
 
     return wrapper
 
