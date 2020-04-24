@@ -23,7 +23,10 @@ try:
 
     logger.remove()
     logger.add(
-        lambda msg: _tqdm.write(msg, end=""), colorize=True, diagnose=True, level="INFO"
+        lambda msg: _tqdm.write(msg, end=""),
+        colorize=True,
+        diagnose=True,
+        level="DEBUG",
     )
 except ImportError:
 
@@ -116,6 +119,7 @@ def main(args):
 
     dataset = {}
     if args.jobs > 1:
+        logger.debug("Using Pool with {} processes", args.jobs)
         with Pool(args.jobs) as p:
             for k, v in tqdm(
                 p.imap_unordered(process_file, iterator, chunksize=30),
@@ -179,11 +183,18 @@ def dump_merge_dataset(new):
     try:
         with open(DATASET) as f:
             dataset = json.load(f)
+            logger.debug(
+                "Updating old dataset of {} items with new of {} items",
+                len(dataset),
+                len(new),
+            )
             dataset.update(new)
     except FileNotFoundError:
+        logger.debug("No old dataset found")
         dataset = new
 
     with open(DATASET, "w") as f:
+        logger.debug("Dumping dataset with size: {}", len(dataset))
         # default is needed to support the SubtitutionStore class
         json.dump(dataset, f, indent=2, default=lambda x: x.__dict__)
 
@@ -212,7 +223,6 @@ def tokenize(lines):
         result = PATTERNS.inst.search(line)
         if result:
             if "llvm.lifetime." in line:
-                logger.debug("Skipping llvm.lifetime")
                 continue
 
             yield from map(str.strip, result.groups()[1].split(","))
