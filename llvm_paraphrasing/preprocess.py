@@ -64,7 +64,7 @@ def entry_point():
 
     try:
         main(parse_args(sys.argv[1:]))
-    except:
+    except Exception:
         logger.exception("Exception")
         raise
 
