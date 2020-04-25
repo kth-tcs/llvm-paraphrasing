@@ -4,7 +4,7 @@ import ctypes
 import json
 import os
 import re
-from functools import wraps
+from functools import lru_cache, wraps
 from multiprocessing import Pool, cpu_count
 from types import SimpleNamespace
 
@@ -120,6 +120,7 @@ def main(args):
 
     dataset = {}
     if args.jobs > 1:
+        _get_library()  # Load this once in parent process
         logger.debug("Using Pool with {} processes", args.jobs)
         with Pool(args.jobs) as p:
             for k, v in tqdm(
@@ -155,29 +156,27 @@ def process_file(filename):
     )
 
 
-def _reader_so(function):
+def reader(path):
     """
-    Wrapper that loads Reader.so once
+    Use Reader library to parse given bitcode from path
     """
-    library_function = ctypes.cdll.LoadLibrary(
-        os.path.join(os.path.abspath(os.path.dirname(__file__)), "Reader.so")
-    ).iterFile
-    library_function.restype = ctypes.c_char_p
-
-    def wrapper(path):
-        """
-        Use Reader library to parse given bitcode from path
-        """
-        return function(library_function(ctypes.c_char_p(path.encode())))
-
-    return wrapper
-
-
-@_reader_so
-def reader(ret):
+    ret = _get_library()(path)
     if ret is None:
         return ""
     return ret.decode().strip()
+
+
+@lru_cache(maxsize=1)
+def _get_library():
+    lib_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "Reader.so")
+    logger.debug("Loading {}", lib_path)
+    library_function = ctypes.cdll.LoadLibrary(lib_path).iterFile
+    library_function.restype = ctypes.c_char_p
+
+    def function(path):
+        return library_function(ctypes.c_char_p(path.encode()))
+
+    return function
 
 
 def dump_merge_dataset(new):
