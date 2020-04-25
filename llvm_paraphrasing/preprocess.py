@@ -33,14 +33,15 @@ except ImportError:
     def _no_func(*_):
         pass
 
-    def _printf(*args):
-        print(args[0].format(*args[1:]))
-
     class NoLogger:
         def __getattr__(self, key):
             if key in ("error", "exception"):
-                return _printf
+                return self.printf
             return _no_func
+
+        @staticmethod
+        def printf(*args):
+            print(args[0].format(*args[1:]))
 
     logger = NoLogger()
     _tqdm = _noop
