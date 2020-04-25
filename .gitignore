@@ -272,3 +272,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+### Other ###
+# Ignore dataset
+dataset*.json
