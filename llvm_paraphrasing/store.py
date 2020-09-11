@@ -86,7 +86,7 @@ class SubtitutionStore:
             value = d.get(key)
             if value:
                 return prefix, value
-        return (None, None)
+        return None, None
 
     def __repr__(self):
         return str(self)

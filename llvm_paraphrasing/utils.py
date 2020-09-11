@@ -1,8 +1,9 @@
-import json
+import shelve
+from collections import defaultdict
 from functools import wraps
 
-_DATASET = "dataset.json"
-_DATASET_RESTORED = "dataset-restored.json"
+_DATASET = "dataset"
+_DATASET_RESTORED = "dataset-restored"
 
 
 def aslist(generator):
@@ -17,21 +18,42 @@ def aslist(generator):
     return wrapper
 
 
-def read_dataset():
-    with open(_DATASET) as f:
-        return json.load(f)
+def read_dataset(flag="r"):
+    return shelve.open(_DATASET, flag=flag)
 
 
-def write_dataset(dataset):
-    # default is needed to support the SubtitutionStore class
-    _dump(_DATASET, dataset, default=lambda x: x.__dict__)
+def read_dataset_restored(flag="n"):
+    return shelve.open(_DATASET_RESTORED, flag=flag)
 
 
-def write_dataset_restored(dataset):
-    _dump(_DATASET_RESTORED, dataset)
+def file_basenames(files):
+    basenames = defaultdict(list)
+    for fname in files:
+        basenames[_strip_suffixes(fname)].append(fname)
+    return basenames
+    # return sorted(set(_strip_suffixes(k) for k in files))
 
 
-def _dump(filename, d, **kwargs):
-    kwargs.setdefault("indent", 2)
-    with open(filename, "w") as f:
-        json.dump(d, f, **kwargs)
+def _strip_suffixes(s, levels=("", "-O0", "-O1", "-O2", "-O3", "-Os", "-Oz")):
+    for level in levels:
+        suffix = f"-strip{level}.bc"
+        if s.endswith(suffix):
+            return s[: -len(suffix)]
+    assert False
+
+
+def pad_chars(line, restore=False, chars='[]()"<>,'):
+    for c in chars:
+        if restore:
+            line = line.replace(f" {c}", c).replace(f"{c} ", c)
+        else:
+            line = line.replace(c, f" {c} ")
+    return line.strip()
+
+
+def splitkeep(s, delimiter):
+    split = s.split(delimiter)
+    result = [substr + delimiter for substr in split[:-1]] + [split[-1]]
+
+    assert "".join(result) == s
+    return result
