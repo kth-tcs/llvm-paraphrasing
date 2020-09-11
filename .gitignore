@@ -275,4 +275,4 @@ dmypy.json
 
 ### Other ###
 # Ignore dataset
-dataset*.json
+dataset*

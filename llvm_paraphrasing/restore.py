@@ -1,18 +1,22 @@
+# WIP
+import re
+
 from .store import SubtitutionStore
-from .utils import aslist, read_dataset, write_dataset_restored
+from .utils import aslist, read_dataset, read_dataset_restored
 
 
 def main():
-    write_dataset_restored(restore_dataset(read_dataset()))
+    restore_dataset(read_dataset()).close()
 
 
 def restore_dataset(original):
-    restored = {}
+    restored = read_dataset_restored()
     for fname, content in original.items():
-        restored[fname] = functions = []
+        functions = []
         for tokens, store in content:
-            store = SubtitutionStore.from_json(store)
+            # store = SubtitutionStore.from_json(store)
             functions.append(restore_tokens(tokens, store))
+        restored[fname] = functions
     return restored
 
 
@@ -20,14 +24,20 @@ def restore_dataset(original):
 def restore_tokens(tokens, store):
     number = ""
     for token in tokens:
-        if token.startswith("NUMBER"):
-            number += token[6:]
+        if token.startswith("𝒩"):
+            number += token[1:]
             continue
         if number:
             # End of previous number, yield it but we fall through to handle the
             # current token
             yield number
             number = ""
+
+        match = re.search(r"align(\d\d?)", token)
+        if match:
+            yield "align"
+            yield match[1]
+            continue
 
         restored = store.restore_token(token)
         if restored is None:
@@ -36,6 +46,11 @@ def restore_tokens(tokens, store):
             yield restored
     if number:
         yield number
+
+
+def replace_lines(lines, functions, cb):
+    for fidx in functions:
+        lines[slice(*fidx)] = list(map(cb, lines[slice(*fidx)]))
 
 
 if __name__ == "__main__":

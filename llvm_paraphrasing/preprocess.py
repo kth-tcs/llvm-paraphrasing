@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
 import argparse
-import ctypes
-import os
-import re
-from functools import lru_cache
 from multiprocessing import Pool, cpu_count
-from types import SimpleNamespace
 
+from .assembly_parser import reader
 from .store import SubtitutionStore
-from .utils import aslist, read_dataset, write_dataset
+from .utils import aslist, read_dataset
 
 
 def _noop(x, **_):
@@ -45,6 +41,7 @@ except ImportError:
 
     logger = NoLogger()
     _tqdm = _noop
+    have_tqdm = False
 
 
 def entry_point():
@@ -83,6 +80,8 @@ def parse_args(args):
         nargs="*",
         help="List of files to process. If not specified, stdin is used to read files.",
     )
+    # XXX: Configure preprocessing
+    # parser.add_argument("--semicolon", action="store_true", help="Add a semicolon after each instruction")
 
     args = parser.parse_args(args)
 
@@ -106,13 +105,15 @@ def main(args):
     else:
         tqdm = _noop
 
-    dataset = {}
+    dataset = read_dataset(flag="c")
+    logger.debug("Read dataset with size: {}", len(dataset))
+
     if args.jobs > 1:
-        _get_library()  # Load this once in parent process
-        logger.debug("Using Pool with {} processes", args.jobs)
+        chunksize = min(150, max(30, int(0.5 * len(iterator) / args.jobs)))
+        logger.debug("Using Pool with {} processes, {} chunksize", args.jobs, chunksize)
         with Pool(args.jobs) as p:
             for k, v in tqdm(
-                p.imap_unordered(process_file, iterator, chunksize=30),
+                p.imap_unordered(process_file, iterator, chunksize=chunksize),
                 total=len(iterator),
             ):
                 dataset[k] = v
@@ -120,7 +121,7 @@ def main(args):
         for filename in tqdm(iterator):
             dataset[filename] = process_file(filename)[1]
 
-    dump_merge_dataset(dataset)
+    dataset.close()
 
 
 def iter_input_filenames():
@@ -138,85 +139,11 @@ def process_file(filename):
     return (
         # Return filename because it is needed after pool.map_unordered
         filename,
-        process_dataset(
-            map(str.split, " ".join(tokenize(reader(filename))).strip().split("\n"))
-        ),
+        process_dataset(reader(filename)),
     )
 
 
-def reader(path):
-    """
-    Use Reader library to parse given bitcode from path
-    """
-    ret = _get_library()(path)
-    if ret is None:
-        return ""
-    return ret.decode().strip()
-
-
-@lru_cache(maxsize=1)
-def _get_library():
-    lib_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "Reader.so")
-    logger.debug("Loading {}", lib_path)
-    library_function = ctypes.cdll.LoadLibrary(lib_path).iterFile
-    library_function.restype = ctypes.c_char_p
-
-    def function(path):
-        return library_function(ctypes.c_char_p(path.encode()))
-
-    return function
-
-
-def dump_merge_dataset(new):
-    try:
-        dataset = read_dataset()
-        logger.debug(
-            "Updating old dataset of {} items with new of {} items",
-            len(dataset),
-            len(new),
-        )
-        dataset.update(new)
-    except FileNotFoundError:
-        logger.debug("No old dataset found")
-        dataset = new
-
-    logger.debug("Dumping dataset with size: {}", len(dataset))
-    write_dataset(dataset)
-
-
-PATTERNS = SimpleNamespace(
-    f=re.compile(r"^Function: ([^\s=]+ =(.*))"),
-    bb=re.compile(r"^BasicBlock$"),
-    inst=re.compile(r"^Instruction:\s*(%[^\s=]+ = )?(.+)"),
-)
-
-
-def tokenize(lines):
-    for line in filter(bool, map(line_replace, lines.split("\n"))):
-        result = PATTERNS.f.search(line)
-        if result:
-            # name, args = result.groups()
-            yield "\nFunction"
-            yield from result.groups()[1].strip().split()
-            continue
-
-        result = PATTERNS.bb.search(line)
-        if result:
-            yield "BasicBlock"
-            continue
-
-        result = PATTERNS.inst.search(line)
-        if result:
-            if "llvm.lifetime." in line:
-                continue
-
-            yield from map(str.strip, result.groups()[1].split(","))
-            yield ";"
-            continue
-
-        logger.error("No match: '{}'", line)
-
-
+# TODO: reverse if needed
 def line_replace(line):
     return (
         line.replace("[", " [ ")
@@ -235,26 +162,68 @@ def line_replace(line):
 def process_dataset(dataset):
     for line in dataset:
         context = SubtitutionStore()
-        yield process_function(line, context), context
+        tokens = process_function(line, context)
+        # tokens = context.make_unique(tokens)
+        yield tokens, context
 
 
 @aslist
 def process_function(line, context):
     for token in line:
-        token = process_token(token, context)
-        if isinstance(token, list):
-            yield from token
+        if token[0] == ":" and not token[1:].isdigit():
+            context.add(token, prefix="LABEL")
+
+    prev = None
+    for token in line:
+        if prev is not None:
+            token = prev + token
+            prev = None
+        result = process_token(token, context)
+        if result is None:
+            prev = token
+            continue
+        if isinstance(result, list):
+            yield from result
         else:
-            yield token
+            yield result
+    assert prev is None
 
 
 # TODO: extract top names from dataset
-NAME_WHITELIST = ["free", "strcmp"]
+NAME_WHITELIST = [
+    "strcmp",
+    ".0",
+    ".lr.ph",
+    "llvm.memset.p0i8.i64",
+    ".exit",
+    "._crit_edge",
+    "llvm.memcpy.p0i8.p0i8.i64",
+    "die",
+    "strlen",
+    ".pre",
+    "or.cond",
+    "spec.select",
+    ".1",
+    ".critedge",
+    ".loopexit",
+    ".0.i",
+    "_efree",
+    ".preheader",
+    "__errno_location",
+    "xcalloc",
+    "calloc",
+    "malloc",
+    "realloc",
+    "free",
+]
 
 
 def process_token(token, context):
+    if token == "align":
+        return None
+
     # TODO: support @.str + number
-    if token[0] in ("%", "@"):  # type / ref (?)
+    if token[0] in ("%", "@", ":"):  # type / ref (?) / label
         pointers = 0
         for c in token[::-1]:
             if c != "*":
@@ -262,19 +231,23 @@ def process_token(token, context):
             pointers += 1
         if pointers == 0:
             tpe = token[1:]
-            pointers = []
+            pointers = ""
         else:
             tpe = token[1:-pointers]
-            pointers = ["*" * pointers]
+            pointers = "*" * pointers
 
-        # XXX: more tokens like for @1 etc -- what are these?
-        if not (
-            (tpe.isdigit() and token[0] == "%")
-            or tpe.startswith(".str.")
-            or tpe.lower() in NAME_WHITELIST
-        ):
+        if tpe.isdigit():
+            # Do not break e.g. %33
+            # return [f"{token[0]}{tpe}"] + [pointers]
+            return token  # XXX: SentencePiece
+        if not (tpe.startswith(".str.") or tpe.lower() in NAME_WHITELIST):
             tpe = context.add(tpe)
-        return [f"{token[0]}{tpe}"] + pointers
+        # return [token[0], str(tpe)] + [pointers]
+        return f"{token[0]}{tpe}{pointers}"  # XXX: SentencePiece
+
+    # return token  # XXX: SentencePiece
+    #
+    # XXX: handle special case: 'align \d\d?'
     if token[:2] == "0x":
         return ["0x"] + numbered_tokens(token[2:])
     try:
@@ -288,7 +261,7 @@ def process_token(token, context):
 
 
 def numbered_tokens(token):
-    return ["NUMBER" + c for c in token]
+    return ["𝒩" + c for c in token]
 
 
 if __name__ == "__main__":
