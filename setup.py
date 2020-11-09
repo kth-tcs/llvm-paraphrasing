@@ -22,7 +22,7 @@ setup(
             f"{PACKAGE_NAME}-preprocess = {PACKAGE_NAME}.preprocess:entry_point",
             f"{PACKAGE_NAME}-restore = {PACKAGE_NAME}.restore:main",
             f"{PACKAGE_NAME}-split-train = {PACKAGE_NAME}.split_train:main",
-            f"{PACKAGE_NAME}-2raw = {PACKAGE_NAME}.dataset2raw:main",
+            f"{PACKAGE_NAME}-2raw = {PACKAGE_NAME}.dataset2raw:entry_point",
         ]
     },
 )
