@@ -1,29 +1,50 @@
 import re
 
-from .utils import aslist
+from .utils import aslist, ASM_PREFIX
 
 FUNC_PATTERN = re.compile(r"([^\s]+) @([^\s]+)\((.*?)\)")
 
 
-def func_signature(definition):
-    return_type, name, args = FUNC_PATTERN.search(definition).groups()
-    yield return_type
-    yield "@" + name
-    # Each argument should be tokenized because they might contain optional
-    # parameter attributes which should result in separate tokens.
-    # E.g. '(%5* nocapture, i32)' -> ['%5*', 'nocapture', ',', 'i32']
-    yield from comma_tokenize(args)
+def function_signature(s):
+    # First, split by words and find the return type and the name
+    words = s.split()
+    for word, next_word in zip(words, words[1:]):
+        if next_word[0] == "@":
+            yield word
+        elif word[0] == "@":
+            # Function name is until the parenthesis is encountered
+            yield word.split("(", 1)[0]
+            break
+
+    # Then, manually parse character by character and return the
+    # arguments, without the surrounding parenthesis
+    seen_at = False
+    end = start = depth = 0
+    for idx, c in enumerate(s):
+        if seen_at:
+            if c == "(":
+                if depth == 0:
+                    start = idx + 1
+                depth += 1
+            elif c == ")":
+                depth -= 1
+            if start and depth == 0:
+                end = idx
+                break
+        else:
+            seen_at = c == "@"
+    yield from comma_tokenize(line_replace(s[start:end]))
 
 
-def reader(fname):
-    with open(fname) as f:
+def reader(filename):
+    with open(filename) as f:
         lines = [line.strip() for line in f]
-    for fidx in _function_indices(lines):
-        yield list(tokenize(lines[slice(*fidx)]))
+    for function_idx in function_indices(lines):
+        yield list(tokenize(lines[slice(*function_idx)]))
 
 
 @aslist
-def _function_indices(lines):
+def function_indices(lines):
     depth = 0
     start = None
     for idx, line in enumerate(lines):
@@ -38,11 +59,12 @@ def _function_indices(lines):
             depth += line.count("{") - line.count("}")
             if depth == 0:
                 if idx - start < 4000:
-                    yield start, idx
+                    yield start, idx + 1
                 start = None
     assert depth == 0
 
 
+ASM_PATTERN = re.compile(r"\basm\b")
 INSTRUCTION_PATTERN = re.compile(r"(%[^\s=]+ = )?(.+)")
 LABEL_PATTERN = re.compile(r"\s*;.*")
 
@@ -51,13 +73,17 @@ def tokenize(lines):
     lines = filter(None, lines)
 
     try:
-        yield from func_signature(next(lines))
+        yield from function_signature(next(lines))
         yield "<SF>"  # XXX Optional
     except StopIteration:
         raise ValueError("Empty input")
 
     for line in lines:
         # XXX: Detect basic block
+
+        if ASM_PATTERN.search(line):
+            yield ASM_PREFIX + line
+            continue
 
         # Now we don't need comments any more since we found the basic blocks.
         # Strip them and re-check for empty lines.
@@ -91,7 +117,7 @@ def tokenize(lines):
 def comma_tokenize(s, filter_cb=None):
     """
     Tokenizes string by splitting at commas and filtering each item. Items with spaces
-    inside them will also be tokenized but not with extra commas. Commas are outputed as
+    inside them will also be tokenized but not with extra commas. Commas are outputted as
     separate tokens.
 
     E.g. 'add i32 %1, 10' -> ['add', 'i32', '%1', ',', '10']

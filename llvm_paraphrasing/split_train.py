@@ -1,84 +1,132 @@
+import shelve
+import sys
+from operator import itemgetter
+
 from loguru import logger
 
 from .utils import read_dataset
 
+_DATASET = "dataset-pairs"
+
+
+def insert(db, *args, v):
+    args = list(args)
+    if not args:
+        raise ValueError("No keys")
+
+    # To avoid enabling writeback, start from a dict
+    d0 = d = db.get(args[0], {})
+    for arg in args[1:]:
+        d = d.setdefault(arg, {})
+    d[args[-1]] = v
+
+    # Finally, (re-)save the dict to update the actual values on disk
+    db[args[0]] = d0
+
 
 def main():
-    # LEVELS = ("", "-O1", "-O2", "-O3", "-Os")
-    LEVELS = ("", "-O2")  # , "-O3")
+    if len(sys.argv) > 1 and sys.argv[1] == "flatten":
+        flatten(shelve.open(_DATASET, "r"))
+        return
+
+    # levels = ("", "-O1", "-O2", "-O3", "-Os")
+    levels = ("", "-O2")  # , "-O3")
 
     def strip_postfixes(s):
-        for postfix in map(fmt_postfix, LEVELS):
+        for postfix in map(fmt_postfix, levels):
             if s.endswith(postfix):
                 return s[: -len(postfix)]
         # assert False
         return None
 
+    # TODO: atexit close
     dataset = read_dataset()
+    result = shelve.open(_DATASET, flag="n")
+
     basenames = sorted(filter(None, set(strip_postfixes(k) for k in dataset.keys())))
-    # XXX: train/valid/test
+    logger.debug("Got {} basenames", len(basenames))
 
-    tmp = 0
-    for idx_from, from_level in enumerate(map(fmt_postfix, LEVELS)):
-        for to_level in map(fmt_postfix, LEVELS[idx_from + 1 :]):
-            save_fname = f"data{from_level}-{to_level}"
-            with open(save_fname + ".FROM.txt", "w") as f1, open(
-                save_fname + ".TO.txt", "w"
-            ) as f2:
-                for basename in basenames:
-                    from_data = dataset.get(basename + from_level)
-                    if from_data is None:
-                        logger.debug("{}: File {} not in from", save_fname, basename)
+    for idx_from, from_level in enumerate(map(fmt_postfix, levels)):
+        # TODO: merge two outer loops, delete idx_from
+        for to_level in map(fmt_postfix, levels[idx_from + 1 :]):
+            for basename in basenames:
+                debug = f"{basename}:{from_level}-{to_level}: "
+
+                from_data = dataset.get(basename + from_level)
+                if from_data is None:
+                    logger.debug(debug + "File {} not in from", basename)
+                    continue
+                to_data = dataset.get(basename + to_level)
+                if to_data is None:
+                    logger.debug(debug + "File {} not in to", basename)
+                    continue
+
+                from_functions = dict(name_pair(item) for item in from_data)
+                to_functions = dict(name_pair(item) for item in to_data)
+                from_functions.pop(None, None)
+
+                for func_name, (from_lines, from_store) in from_functions.items():
+                    to_function = to_functions.get(func_name)
+                    if to_function is None:
+                        logger.debug(debug + "Function {} not in to", func_name)
                         continue
-                    to_data = dataset.get(basename + to_level)
-                    if to_data is None:
-                        logger.debug("{}: File {} not in to", save_fname, basename)
+                    to_lines, to_store = to_function
+
+                    if sorted(from_store.prefixes()) != sorted(to_store.prefixes()):
+                        logger.debug(
+                            debug + "{}: {} != {}",
+                            func_name,
+                            from_store,
+                            to_store,
+                        )
                         continue
 
-                    from_functions = dict(name_pair(item) for item in from_data)
-                    to_functions = dict(name_pair(item) for item in to_data)
-                    from_functions.pop(None, None)
-                    for func_name, (from_lines, from_store) in from_functions.items():
-                        tmp += 1
-                        to_function = to_functions.get(func_name)
-                        if to_function is None:
-                            logger.debug(
-                                "{}: Function {} not in to", save_fname, func_name
-                            )
-                            continue
-                        to_lines, to_store = to_function
+                    assert isinstance(from_lines, list)
+                    assert isinstance(to_lines, list)
 
-                        from_store.pop("LABEL", None)
-                        to_store.pop("LABEL", None)
-                        if sorted(from_store.keys()) != sorted(to_store.keys()):
-                            from json import dumps
+                    if len(from_lines) > 995 or len(to_lines) > 995:
+                        logger.debug(
+                            debug + "{}: Too long: {} & {}",
+                            func_name,
+                            len(from_lines),
+                            len(to_lines),
+                        )
+                        continue
 
-                            logger.debug(
-                                "{}:{}:{}: {} != {}",
-                                save_fname,
-                                basename,
-                                func_name,
-                                dumps(from_store, indent=2),
-                                dumps(to_store, indent=2),
-                            )
-                            continue
-
-                        print(" ".join(from_lines), file=f1)
-                        print(" ".join(to_lines), file=f2)
-    print(tmp)
+                    insert(
+                        result,
+                        basename,
+                        (from_level, to_level),
+                        func_name,
+                        v=(from_lines, from_store, to_lines, to_store),
+                    )
+    result.close()
 
 
 def fmt_postfix(postfix):
-    return f"-strip{postfix}.ll"
+    return f"{postfix}-renamed.ll"
+    # return f"-strip{postfix}-renamed.ll"
 
 
 def name_pair(item):
     lines, store = item
-    store = store["_store"]
-    name_store = store.get("NAME")
-    if name_store is None:
+    name = store.restore_token("NAME0")
+    if name is None:
         return None, None
-    for token in name_store.values():
-        if token["value"] == 0:
-            return token["original"], (lines, store)
-    assert False
+    return name, (lines, store)
+
+
+def flatten(db):
+    with open("src.txt", "w") as f1, open("tgt.txt", "w") as f2:
+        for v in _dict_sort_values_by_keys(db):  # basename
+            for _v in _dict_sort_values_by_keys(v):  # o1,o2
+                for __v in _dict_sort_values_by_keys(_v):  # func_name
+                    for (t1, _, t2, _) in _dict_sort_values_by_keys(
+                        __v
+                    ):  # tokens & stores
+                        print(" ".join(t1), file=f1)
+                        print(" ".join(t2), file=f2)
+
+
+def _dict_sort_values_by_keys(d):
+    return [v for _, v in sorted(d.items(), key=itemgetter(0))]
