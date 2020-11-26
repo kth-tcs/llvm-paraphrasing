@@ -66,7 +66,7 @@ def restore_file(filename, functions):
             function_tokens = list(
                 filter(lambda x: not x.startswith(":"), function_tokens)
             )  # TODO: fix in dataset
-            sf = function_tokens.index("<SF>")
+            sf = function_tokens.index("<sf>")
 
             if "asm" in function_tokens:  # TODO: fix in preprocess
                 break

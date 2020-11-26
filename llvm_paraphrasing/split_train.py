@@ -30,7 +30,7 @@ def main():
         return
 
     # levels = ("", "-O1", "-O2", "-O3", "-Os")
-    levels = ("", "-O2")  # , "-O3")
+    levels = ("", "-O2")
 
     def strip_postfixes(s):
         for postfix in map(fmt_postfix, levels):
