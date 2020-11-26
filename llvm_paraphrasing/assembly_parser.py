@@ -74,7 +74,7 @@ def tokenize(lines):
 
     try:
         yield from function_signature(next(lines))
-        yield "<SF>"  # XXX Optional
+        yield "<sf>"  # XXX Optional
     except StopIteration:
         raise ValueError("Empty input")
 
