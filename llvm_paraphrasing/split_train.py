@@ -72,7 +72,7 @@ def main():
                         continue
                     to_lines, to_store = to_function
 
-                    if sorted(from_store.prefixes()) != sorted(to_store.prefixes()):
+                    if not from_store.is_compatible_with(to_store):
                         logger.debug(
                             debug + "{}: {} != {}",
                             func_name,

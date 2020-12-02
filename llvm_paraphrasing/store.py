@@ -39,6 +39,38 @@ class SubtitutionStore:
         self._last[prefix] = d[key] = sub = SubtitutedToken(key, prefix, value)
         return sub
 
+    def sort(self, prefix=None):
+        """
+        Sort the store according to the original values for the given prefix.
+
+        If prefix is None, all prefixes are sorted.
+        """
+        if prefix is None:
+            for prefix in self.prefixes():
+                self.sort(prefix)
+            return
+
+        values = [
+            SubtitutedToken(v.original, prefix, idx)
+            for idx, v in enumerate(
+                sorted(self.values(prefix), key=lambda st: st.original)
+            )
+        ]
+        self._store[prefix] = {v.original: v for v in values}
+        self._last[prefix] = values[-1]
+
+    def is_compatible_with(self, other):
+        prefixes = sorted(self.prefixes())
+        if prefixes != sorted(other.prefixes()):
+            return False
+
+        for prefix in prefixes:
+            v1 = sorted(v.original for v in self.values(prefix))
+            v2 = sorted(v.original for v in other.values(prefix))
+            if v1 != v2:
+                return False
+        return True
+
     def prefixes(self):
         return self._store.keys()
 
