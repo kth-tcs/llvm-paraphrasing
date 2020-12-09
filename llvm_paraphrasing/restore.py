@@ -42,7 +42,10 @@ def restored_dataset_to_files(d):
         # return  # XXX
 
 
-def restore_file(filename, functions):
+def restore_file(filename, functions, out_filename=None, typecheck=True):
+    if out_filename is None:
+        out_filename = filename
+
     with open(filename) as f:
         all_lines = [line.strip() for line in f]
     func_indices = function_indices(all_lines)
@@ -53,20 +56,25 @@ def restore_file(filename, functions):
         for function_lines in lines
     ]
 
+    n_restored = 0
     for (function_type, function_name), function_tokens in functions.items():
         for (other_type, other_name), (lines_idx, function_lines) in zip(
             definitions, enumerate(lines)
         ):
+            # XXX: other_name includes '@'. Make more robust?
             if other_name != function_name:
                 continue
-            if other_type != function_type:
+            if typecheck and other_type != function_type:
                 print("WARN:", function_name, function_type, other_type)
                 continue
 
             function_tokens = list(
                 filter(lambda x: not x.startswith(":"), function_tokens)
             )  # TODO: fix in dataset
-            sf = function_tokens.index("<sf>")
+            try:
+                sf = function_tokens.index("<sf>")
+            except ValueError:
+                sf = -1
 
             if "asm" in function_tokens:  # TODO: fix in preprocess
                 break
@@ -78,10 +86,12 @@ def restore_file(filename, functions):
                 + " ".join(function_tokens[sf + 1 :]).replace("0x ", "0x")
                 + "}"
             )
+
+            n_restored += 1
             break
 
     idx = fidx = 0
-    with open(filename, "w") as f:
+    with open(out_filename, "w") as f:
         while idx < len(all_lines):
             if fidx < len(func_indices):
                 # XXX: do with iterator
@@ -98,6 +108,7 @@ def restore_file(filename, functions):
             else:
                 print(all_lines[idx], file=f)
                 idx += 1
+    return n_restored
 
 
 @aslist
