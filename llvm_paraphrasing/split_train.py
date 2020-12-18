@@ -4,7 +4,7 @@ from operator import itemgetter
 
 from loguru import logger
 
-from .utils import read_dataset
+from .utils import after_sf, read_dataset
 
 _DATASET = "dataset-pairs"
 
@@ -125,7 +125,7 @@ def flatten(db):
                         __v
                     ):  # tokens & stores
                         print(" ".join(t1), file=f1)
-                        print(" ".join(t2), file=f2)
+                        print(" ".join(after_sf(t2)), file=f2)
 
 
 def _dict_sort_values_by_keys(d):

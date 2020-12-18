@@ -44,6 +44,14 @@ def _strip_suffixes(s, levels=("", "-O0", "-O1", "-O2", "-O3", "-Os", "-Oz")):
     assert False
 
 
+def after_sf(tokens):
+    try:
+        sf = tokens.index("<sf>")
+        return tokens[sf + 1 :]
+    except ValueError:
+        return tokens
+
+
 def pad_chars(line, restore=False, chars='[]()"<>,'):
     for c in chars:
         if restore:
