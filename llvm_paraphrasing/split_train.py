@@ -50,15 +50,15 @@ def main():
         # TODO: merge two outer loops, delete idx_from
         for to_level in map(fmt_postfix, levels[idx_from + 1 :]):
             for basename in basenames:
-                debug = f"{basename}:{from_level}-{to_level}: "
+                logger.debug("{}:{}-{}: Enter basename", basename, from_level, to_level)
 
                 from_data = dataset.get(basename + from_level)
                 if from_data is None:
-                    logger.debug(debug + "File {} not in from", basename)
+                    logger.debug("  File not in 'from'")
                     continue
                 to_data = dataset.get(basename + to_level)
                 if to_data is None:
-                    logger.debug(debug + "File {} not in to", basename)
+                    logger.debug("  File not in 'to'")
                     continue
 
                 from_functions = dict(name_pair(item) for item in from_data)
@@ -66,16 +66,16 @@ def main():
                 from_functions.pop(None, None)
 
                 for func_name, (from_lines, from_store) in from_functions.items():
+                    logger.debug("  {}: Enter function", func_name)
                     to_function = to_functions.get(func_name)
                     if to_function is None:
-                        logger.debug(debug + "Function {} not in to", func_name)
+                        logger.debug("    Function not in 'to'")
                         continue
                     to_lines, to_store = to_function
 
                     if not from_store.is_compatible_with(to_store):
                         logger.debug(
-                            debug + "{}: {} != {}",
-                            func_name,
+                            "    {} != {}",
                             from_store,
                             to_store,
                         )
@@ -86,8 +86,7 @@ def main():
 
                     if len(from_lines) > 995 or len(to_lines) > 995:
                         logger.debug(
-                            debug + "{}: Too long: {} & {}",
-                            func_name,
+                            "    Too long: {} & {}",
                             len(from_lines),
                             len(to_lines),
                         )
