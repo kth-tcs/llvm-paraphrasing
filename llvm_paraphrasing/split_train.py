@@ -52,46 +52,49 @@ def create_dataset(args):
     for idx_from, from_level in enumerate(map(fmt_postfix, levels)):
         # TODO: merge two outer loops, delete idx_from
         for to_level in map(fmt_postfix, levels[idx_from + 1 :]):
+            logger.debug("Entering levels {} -> {}", from_level, to_level)
+
             for basename in basenames:
-                logger.debug("{}:{}-{}: Enter basename", basename, from_level, to_level)
+                logger.trace("{}:{}-{}: Enter basename", basename, from_level, to_level)
 
                 from_data = dataset.get(basename + from_level)
                 if from_data is None:
-                    logger.debug("  File not in 'from'")
+                    logger.trace("  File not in 'from'")
                     continue
                 to_data = dataset.get(basename + to_level)
                 if to_data is None:
-                    logger.debug("  File not in 'to'")
+                    logger.trace("  File not in 'to'")
                     continue
 
+                # TODO: split to function here?
                 from_functions = dict(name_pair(item) for item in from_data)
                 to_functions = dict(name_pair(item) for item in to_data)
                 from_functions.pop(None, None)
 
-                for func_name, (from_lines, from_store) in from_functions.items():
-                    logger.debug("  {}: Enter function", func_name)
+                for func_name, (from_tokens, from_store) in from_functions.items():
+                    logger.trace("  {}: Enter function", func_name)
                     to_function = to_functions.get(func_name)
                     if to_function is None:
-                        logger.debug("    Function not in 'to'")
+                        logger.trace("    Function not in 'to'")
                         continue
-                    to_lines, to_store = to_function
+                    to_tokens, to_store = to_function
 
                     if not from_store.is_compatible_with(to_store):
-                        logger.debug(
+                        logger.trace(
                             "    {} != {}",
                             from_store,
                             to_store,
                         )
                         continue
 
-                    assert isinstance(from_lines, list)
-                    assert isinstance(to_lines, list)
+                    assert isinstance(from_tokens, list)
+                    assert isinstance(to_tokens, list)
 
-                    if len(from_lines) > 995 or len(to_lines) > 995:
-                        logger.debug(
+                    if len(from_tokens) > 995 or len(to_tokens) > 995:
+                        logger.trace(
                             "    Too long: {} & {}",
-                            len(from_lines),
-                            len(to_lines),
+                            len(from_tokens),
+                            len(to_tokens),
                         )
                         continue
 
@@ -100,7 +103,7 @@ def create_dataset(args):
                         basename,
                         (from_level, to_level),
                         func_name,
-                        v=(from_lines, from_store, to_lines, to_store),
+                        v=(from_tokens, from_store, to_tokens, to_store),
                     )
     # No problem calling close more than once
     dataset.close()
@@ -128,11 +131,11 @@ def fmt_postfix(postfix):
 
 
 def name_pair(item):
-    lines, store = item
+    tokens, store = item
     name = store.restore_token("NAME0")
     if name is None:
         return None, None
-    return name, (lines, store)
+    return name, (tokens, store)
 
 
 def flatten(db):
@@ -142,7 +145,7 @@ def flatten(db):
                 for __v in _dict_sort_values_by_keys(_v):  # func_name
                     for (t1, _, t2, _) in _dict_sort_values_by_keys(
                         __v
-                    ):  # tokens & stores
+                    ):  # tokens & TODO: stores
                         print(" ".join(t1), file=f1)
                         print(" ".join(after_sf(t2)), file=f2)
 
