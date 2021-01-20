@@ -1,3 +1,4 @@
+import atexit
 import shelve
 from collections import defaultdict
 from functools import wraps
@@ -26,6 +27,12 @@ def read_dataset(flag="r"):
 
 def read_dataset_restored(flag="n"):
     return shelve.open(_DATASET_RESTORED, flag=flag)
+
+
+def shelve_open(*args, **kwargs):
+    d = shelve.open(*args, **kwargs)
+    atexit.register(d.close)
+    return d
 
 
 def file_basenames(files):

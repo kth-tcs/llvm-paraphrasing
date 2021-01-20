@@ -1,12 +1,11 @@
-import shelve
+import argparse
+import atexit
 import sys
 from operator import itemgetter
 
 from loguru import logger
 
-from .utils import after_sf, read_dataset
-
-_DATASET = "dataset-pairs"
+from .utils import after_sf, read_dataset, shelve_open
 
 
 def insert(db, *args, v):
@@ -25,12 +24,17 @@ def insert(db, *args, v):
 
 
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] == "flatten":
-        flatten(shelve.open(_DATASET, "r"))
+    args = parse_args()
+    logger.debug("Got args: {}", args)
+    if args.create_dataset:
+        create_dataset(args)
+    if args.flatten:
+        flatten(shelve_open(args.dataset, "r"))
         return
 
-    # levels = ("", "-O1", "-O2", "-O3", "-Os")
-    levels = ("", "-O2")
+
+def create_dataset(args):
+    levels = ("-" + args.from_level, "-" + args.to_level)
 
     def strip_postfixes(s):
         for postfix in map(fmt_postfix, levels):
@@ -39,9 +43,8 @@ def main():
         # assert False
         return None
 
-    # TODO: atexit close
     dataset = read_dataset()
-    result = shelve.open(_DATASET, flag="n")
+    result = shelve_open(args.dataset, flag="n")
 
     basenames = sorted(filter(None, set(strip_postfixes(k) for k in dataset.keys())))
     logger.debug("Got {} basenames", len(basenames))
@@ -99,7 +102,24 @@ def main():
                         func_name,
                         v=(from_lines, from_store, to_lines, to_store),
                     )
+    # No problem calling close more than once
+    dataset.close()
     result.close()
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", default="dataset-pairs")
+    parser.add_argument("--flatten", action="store_true")
+    parser.add_argument("--create-dataset", action="store_true")
+    # TODO: multiple levels
+    parser.add_argument("from_level", nargs="?", default="O1")
+    parser.add_argument("to_level", nargs="?", default="O2")
+
+    args = parser.parse_args()
+    if not args.flatten:
+        args.create_dataset = True
+    return args
 
 
 def fmt_postfix(postfix):
