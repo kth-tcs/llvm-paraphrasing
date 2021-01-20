@@ -3,7 +3,7 @@
 cmake_minimum_required(VERSION 3.4.3)
 
 # Find and print LLVM information
-find_package(LLVM 10.0.0 REQUIRED CONFIG)
+find_package(LLVM REQUIRED CONFIG)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message("LLVM STATUS:
