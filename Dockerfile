@@ -8,19 +8,19 @@ run apt-get update -qq \
     automake build-essential cmake libtool ninja-build pkg-config \
     python3-pip \
     libgoogle-perftools-dev \
+    fd-find \
     && pip3 install ipython loguru tqdm
 
-# Install llvm 10.x
+# Install llvm 11.x
 # See https://apt.llvm.org/
 add https://apt.llvm.org/llvm.sh llvm.sh
-run bash llvm.sh 10
+run bash llvm.sh 11
 
-env PATH="/usr/lib/llvm-10/bin:$PATH"
+env PATH="/usr/lib/llvm-11/bin:$PATH"
 
 run git clone --depth 1 https://github.com/csmith-project/csmith \
     && cd csmith \
-    && autoreconf -fi \
-    && ./configure --prefix=/usr \
+    && cmake -DCMAKE_INSTALL_PREFIX=/usr . \
     && make install -j10 \
     && make install -C runtime install -j
 
@@ -33,6 +33,12 @@ run git clone https://github.com/google/sentencepiece \
     && ldconfig -v \
     && pip3 install sentencepiece
 
-copy . /workdir
-workdir /workdir
-run pip3 install .
+copy . /llvm-para
+workdir /llvm-para
+run pip3 install . \
+    && cd Normalization-pass \
+    && rm -rf build \
+    && mkdir build \
+    && cd build \
+    && cmake .. \
+    && make -j
