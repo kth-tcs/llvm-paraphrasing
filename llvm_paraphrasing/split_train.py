@@ -5,7 +5,7 @@ from operator import itemgetter
 
 from loguru import logger
 
-from .utils import after_sf, read_dataset, shelve_open
+from .utils import after_sf, catch_and_exit, logger_setup, read_dataset, shelve_open
 
 
 def insert(db, *args, v):
@@ -23,7 +23,10 @@ def insert(db, *args, v):
     db[args[0]] = d0
 
 
+@catch_and_exit
 def main():
+    logger_setup(logger)
+
     args = parse_args()
     logger.debug("Got args: {}", args)
     if args.create_dataset:

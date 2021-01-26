@@ -1,7 +1,12 @@
 import atexit
+import os
 import shelve
+import sys
+import time
 from collections import defaultdict
-from functools import wraps
+from functools import partial, wraps
+
+from loguru import logger
 
 ASM_PREFIX = "asm=>"
 NUM_PREFIX = "NUM"
@@ -74,3 +79,67 @@ def splitkeep(s, delimiter):
 
     assert "".join(result) == s
     return result
+
+
+def catch_and_exit(function):
+    return logger.catch(onerror=lambda _: sys.exit(1))(function)
+
+
+def logger_setup(_logger=logger, telegram=True, tqdm=None, **kwargs):
+    _logger.remove()
+    kwargs.setdefault(
+        "sink", lambda msg: tqdm.write(msg, end="") if tqdm else sys.stderr
+    )
+    kwargs.setdefault("level", "DEBUG")
+    kwargs.setdefault("backtrace", True)
+    kwargs.setdefault("colorize", True)
+    kwargs.setdefault("diagnose", True)
+    kwargs.setdefault("enque", True)
+    _logger.add(**kwargs)
+    if telegram:
+        _add_telegram_notifier(_logger)
+
+
+@logger.catch(reraise=False)
+def _add_telegram_notifier(_logger=logger):
+    import notifiers
+    from notifiers.logging import NotificationHandler
+
+    token = os.environ.get("TELEGRAM_TOKEN")
+    if token is None:
+        logger.error("Could not get $TELEGRAM_TOKEN")
+        return
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if chat_id is None:
+        logger.error("Could not get $TELEGRAM_CHAT_ID")
+        return
+
+    notifier = notifiers.get_notifier("telegram")
+    params = dict(token=token, chat_id=chat_id)
+    handler = NotificationHandler(
+        "telegram",
+        defaults=params,
+    )
+    _logger.add(handler, level="ERROR")
+
+    atexit.register(
+        partial(notifier.notify, message=f"Exiting {sys.argv[0]}", **params)
+    )
+
+    return partial(notifier.notify, **params)
+
+
+def timeit(function):
+    @wraps(function)
+    def wraper(*args, **kwargs):
+        start = time.time()
+        result = function(*args, **kwargs)
+        logger.debug(
+            "{}:{} done in {} seconds",
+            function.__module__,
+            function.__name__,
+            time.time() - start,
+        )
+        return result
+
+    return wraper

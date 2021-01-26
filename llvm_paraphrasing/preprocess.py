@@ -4,7 +4,14 @@ from multiprocessing import Pool, cpu_count
 
 from .assembly_parser import reader
 from .store import SubtitutionStore
-from .utils import aslist, read_dataset, ASM_PREFIX, NUM_PREFIX
+from .utils import (
+    ASM_PREFIX,
+    NUM_PREFIX,
+    aslist,
+    catch_and_exit,
+    logger_setup,
+    read_dataset,
+)
 
 
 def _noop(x, **_):
@@ -47,11 +54,8 @@ except ImportError:
 def entry_point():
     import sys
 
-    try:
-        main(parse_args(sys.argv[1:]))
-    except Exception:
-        logger.exception("Exception")
-        raise
+    logger_setup(logger)
+    main(parse_args(sys.argv[1:]))
 
 
 def parse_args(args):
@@ -94,6 +98,7 @@ def parse_args(args):
     return args
 
 
+@catch_and_exit
 def main(args):
     if args.files:
         iterator = args.files
