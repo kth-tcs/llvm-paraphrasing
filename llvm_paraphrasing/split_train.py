@@ -149,8 +149,12 @@ def flatten(db):
                     for (t1, _, t2, _) in _dict_sort_values_by_keys(
                         __v
                     ):  # tokens & TODO: stores
-                        print(" ".join(t1), file=f1)
-                        print(" ".join(after_sf(t2)), file=f2)
+                        t2 = after_sf(t2)
+                        s1 = " ".join(after_sf(t1)).strip()
+                        s2 = " ".join(t2).strip()
+                        if s1 != s2:
+                            print(" ".join(t1), file=f1)
+                            print(s2, file=f2)
 
 
 def _dict_sort_values_by_keys(d):
