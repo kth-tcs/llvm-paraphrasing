@@ -54,7 +54,7 @@ class SubtitutionStore:
             return default
         return result
 
-    def restore_token(self, subtituted_token):
+    def restore_token(self, subtituted_token, default=None):
         first = subtituted_token[0]
         if first in ("@", "%"):
             subtituted_token = subtituted_token[1:]
@@ -70,7 +70,7 @@ class SubtitutionStore:
                     if token.value == value:
                         return first + token.original
                 break
-        return None
+        return default
 
     def __getitem__(self, key):
         result = self._getitem_and_prefix(key)[1]
