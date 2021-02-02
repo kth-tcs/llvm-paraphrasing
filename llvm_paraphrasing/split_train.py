@@ -142,19 +142,25 @@ def name_pair(item):
 
 
 def flatten(db):
-    with open("src.txt", "w") as f1, open("tgt.txt", "w") as f2:
+    with open("src.txt", "w") as f_src, open("tgt.txt", "w") as f_tgt, open(
+        "stores.txt", "w"
+    ) as f_stores:
         for v in _dict_sort_values_by_keys(db):  # basename
             for _v in _dict_sort_values_by_keys(v):  # o1,o2
                 for __v in _dict_sort_values_by_keys(_v):  # func_name
-                    for (t1, _, t2, _) in _dict_sort_values_by_keys(
-                        __v
-                    ):  # tokens & TODO: stores
-                        t2 = after_sf(t2)
-                        s1 = " ".join(after_sf(t1)).strip()
-                        s2 = " ".join(t2).strip()
-                        if s1 != s2:
-                            print(" ".join(t1), file=f1)
-                            print(s2, file=f2)
+                    for (
+                        tokens_src,
+                        _,
+                        tokens_tgt,
+                        store_tgt,
+                    ) in _dict_sort_values_by_keys(__v):
+                        tokens_tgt = after_sf(tokens_tgt)
+                        str_src = " ".join(after_sf(tokens_src)).strip()
+                        str_tgt = " ".join(tokens_tgt).strip()
+                        if str_src != str_tgt:
+                            print(" ".join(tokens_src), file=f_src)
+                            print(str_tgt, file=f_tgt)
+                            print(store_tgt.dump(), file=f_stores)
 
 
 def _dict_sort_values_by_keys(d):
