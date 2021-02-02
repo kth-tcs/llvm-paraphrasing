@@ -20,6 +20,10 @@ class SubtitutionStore:
                 store.add(k, prefix)
         return store
 
+    def dump(self, **kwargs):
+        kwargs.setdefault("default", lambda x: x.__dict__)
+        return json.dumps(self, **kwargs)
+
     def add(self, key, prefix="NAME"):
         existing_prefix, existing_value = self._getitem_and_prefix(key)
         if existing_value:

@@ -53,21 +53,21 @@ def test_get_contains():
 
 def test_from_json_empty():
     store1 = SubtitutionStore()
-    d = dump(store1)
+    d = store1.dump()
     store2 = SubtitutionStore.from_json(d)
-    assert d == dump(store2)
+    assert d == store2.dump()
 
     store1.add("XXX")
-    assert dump(store1) != dump(store2)
+    assert store1.dump() != store2.dump()
 
 
 def test_from_json_random():
     store1 = SubtitutionStore()
     add_random(store1, 3, ["a", "XXX", "YYY"])
 
-    d = dump(store1)
+    d = store1.dump()
     store2 = SubtitutionStore.from_json(d)
-    assert d == dump(store2)
+    assert d == store2.dump()
 
 
 def test_from_json_manual():
@@ -86,8 +86,8 @@ def test_from_json_manual():
     }
     store1 = SubtitutionStore.from_json(d)
     store2 = SubtitutionStore.from_json(json.dumps(d))
-    d1 = dump(store1)
-    d2 = dump(store2)
+    d1 = store1.dump()
+    d2 = store2.dump()
     assert d1 == d2
 
     d1 = json.loads(d1)
@@ -130,8 +130,3 @@ def add_random(store, n_values, prefixes):
         result = store.add(original, prefix=prefix)
         assert result.original == original
         assert result.prefix == prefix
-
-
-def dump(store, **kwargs):
-    kwargs.setdefault("default", lambda x: x.__dict__)
-    return json.dumps(store, **kwargs)
