@@ -4,7 +4,7 @@ import re
 from itertools import islice
 
 from .assembly_parser import function_indices, function_signature
-from .utils import aslist, read_dataset, read_dataset_restored, NUM_PREFIX
+from .utils import NUM_PREFIX, aslist, read_dataset, read_dataset_restored
 
 
 def main():

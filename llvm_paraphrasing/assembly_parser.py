@@ -1,6 +1,6 @@
 import re
 
-from .utils import aslist, ASM_PREFIX
+from .utils import ASM_PREFIX, aslist
 
 FUNC_PATTERN = re.compile(r"([^\s]+) @([^\s]+)\((.*?)\)")
 

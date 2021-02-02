@@ -2,7 +2,6 @@ import json
 import random
 
 import pytest
-
 from llvm_paraphrasing.store import SubtitutionStore
 
 

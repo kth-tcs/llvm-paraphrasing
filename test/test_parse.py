@@ -2,8 +2,7 @@ import json
 import random
 
 import pytest
-
-from llvm_paraphrasing.assembly_parser import function_signature, function_indices
+from llvm_paraphrasing.assembly_parser import function_indices, function_signature
 
 
 def test_func_signature():
