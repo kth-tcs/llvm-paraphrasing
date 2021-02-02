@@ -137,7 +137,7 @@ class SubtitutedToken:
         self.value = value
 
     def __repr__(self):
-        return f"{hex(id(self))}: {self.original} => {str(self)}"
+        return f"SubtitutedToken({self.original} => {str(self)})"
 
     def __str__(self):
         return f"{self.prefix}{self.value}"
