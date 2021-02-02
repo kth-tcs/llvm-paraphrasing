@@ -4,7 +4,7 @@ from multiprocessing import Pool, cpu_count
 
 from .assembly_parser import reader
 from .store import SubtitutionStore
-from .utils import aslist, read_dataset
+from .utils import aslist, read_dataset, ASM_PREFIX, NUM_PREFIX
 
 
 def _noop(x, **_):
@@ -100,7 +100,6 @@ def main(args):
     else:
         iterator = iter_input_filenames()
     if args.tqdm:
-        iterator = list(iterator)
         tqdm = _tqdm
     else:
         tqdm = _noop
@@ -108,6 +107,8 @@ def main(args):
     dataset = read_dataset(flag="c")
     logger.debug("Read dataset with size: {}", len(dataset))
 
+    if args.jobs > 1 or args.tqdm:
+        iterator = list(iterator)
     if args.jobs > 1:
         chunksize = min(150, max(30, int(0.5 * len(iterator) / args.jobs)))
         logger.debug("Using Pool with {} processes, {} chunksize", args.jobs, chunksize)
@@ -222,6 +223,10 @@ def process_token(token, context):
     if token == "align":
         return None
 
+    if token.startswith(ASM_PREFIX):
+        token = token[len(ASM_PREFIX) :]
+        return str(context.add(token, prefix="ASM"))
+
     # TODO: support @.str + number
     if token[0] in ("%", "@", ":"):  # type / ref (?) / label
         pointers = 0
@@ -261,7 +266,7 @@ def process_token(token, context):
 
 
 def numbered_tokens(token):
-    return ["𝒩" + c for c in token]
+    return [NUM_PREFIX + c for c in token]
 
 
 if __name__ == "__main__":

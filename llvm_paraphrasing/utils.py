@@ -2,6 +2,8 @@ import shelve
 from collections import defaultdict
 from functools import wraps
 
+ASM_PREFIX = "asm=>"
+NUM_PREFIX = "NUM"
 _DATASET = "dataset"
 _DATASET_RESTORED = "dataset-restored"
 
