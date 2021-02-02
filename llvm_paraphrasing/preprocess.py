@@ -2,6 +2,9 @@
 import argparse
 from multiprocessing import Pool, cpu_count
 
+from loguru import logger
+from tqdm import tqdm
+
 from .assembly_parser import reader
 from .store import SubtitutionStore
 from .utils import (
@@ -18,43 +21,10 @@ def _noop(x, **_):
     return x
 
 
-try:
-    from loguru import logger
-    from tqdm import tqdm as _tqdm
-
-    have_tqdm = True
-
-    logger.remove()
-    logger.add(
-        lambda msg: _tqdm.write(msg, end=""),
-        colorize=True,
-        diagnose=True,
-        level="DEBUG",
-    )
-except ImportError:
-
-    def _no_func(*_):
-        pass
-
-    class NoLogger:
-        def __getattr__(self, key):
-            if key in ("error", "exception"):
-                return self.printf
-            return _no_func
-
-        @staticmethod
-        def printf(*args):
-            print(args[0].format(*args[1:]))
-
-    logger = NoLogger()
-    _tqdm = _noop
-    have_tqdm = False
-
-
 def entry_point():
     import sys
 
-    logger_setup(logger)
+    logger_setup(logger, tqdm=tqdm)
     main(parse_args(sys.argv[1:]))
 
 
@@ -70,13 +40,6 @@ def parse_args(args):
         nargs="?",
         type=int,
         help="Number of parallel jobs in pool. If not specified, no pool is used.",
-    )
-    parser.add_argument(
-        "--no-tqdm",
-        action="store_false",
-        default=have_tqdm,
-        dest="tqdm",
-        help="Do not use tqdm for progress bar",
     )
     parser.add_argument(
         "files",
@@ -101,36 +64,31 @@ def parse_args(args):
 @catch_and_exit
 def main(args):
     if args.files:
-        iterator = args.files
+        files = args.files
     else:
-        iterator = iter_input_filenames()
-    if args.tqdm:
-        tqdm = _tqdm
-    else:
-        tqdm = _noop
+        files = read_input_filenames()
 
     dataset = read_dataset(flag="c")
     logger.debug("Read dataset with size: {}", len(dataset))
 
-    if args.jobs > 1 or args.tqdm:
-        iterator = list(iterator)
     if args.jobs > 1:
-        chunksize = min(150, max(30, int(0.5 * len(iterator) / args.jobs)))
+        chunksize = min(150, max(30, int(0.5 * len(files) / args.jobs)))
         logger.debug("Using Pool with {} processes, {} chunksize", args.jobs, chunksize)
         with Pool(args.jobs) as p:
             for k, v in tqdm(
-                p.imap_unordered(process_file, iterator, chunksize=chunksize),
-                total=len(iterator),
+                p.imap_unordered(process_file, files, chunksize=chunksize),
+                total=len(files),
             ):
                 dataset[k] = v
     else:
-        for filename in tqdm(iterator):
+        for filename in tqdm(files):
             dataset[filename] = process_file(filename)[1]
 
     dataset.close()
 
 
-def iter_input_filenames():
+@aslist
+def read_input_filenames():
     while True:
         try:
             yield input().strip()
